@@ -104,11 +104,6 @@ def in_degrees(A: np.ndarray) -> np.ndarray:
     return validate_adjacency(A).sum(axis=0)
 
 
-def dead_end_nodes(A: np.ndarray) -> list[int]:
-    """Çıkış bağlantısı olmayan sayfaların indeksleri."""
-    return [int(i) for i in np.flatnonzero(out_degrees(A) == 0)]
-
-
 def to_networkx(A: np.ndarray):
     """Doğrulama ve görselleştirme için ``networkx.DiGraph`` döndürür."""
     import networkx as nx

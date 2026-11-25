@@ -1,60 +1,41 @@
-# Web Link Analysis – Proje 4.3
+# Web Link Analysis (Proje 4.3)
 
-PageRank ve HITS algoritmalarıyla sentetik web bağlantı grafiği analizi.
+Akıllı Bilgi Erişim Sistemleri ve Metin Analitiği dersi proje ödevi.
+PageRank ve HITS algoritmalarını Python ile yazıp rastgele bir web grafiği üzerinde Spider Trap, Dead End ve sönümleme faktörü (α) deneyleri yaptım.
 
-## Gereksinimler
-- Python 3.10 veya üzeri
-- Visual Studio Code
-- `requirements.txt` içindeki Python paketleri
+Ali Cömert - 21YÖBİ1042
 
-## Windows PowerShell ile kurulum
+## Kurulum
 
-Proje klasöründe terminal açın ve sırayla çalıştırın:
+Python 3.10 veya üstü gerekiyor.
 
 ```powershell
-py -3 --version
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 pip install -r requirements.txt
-python -m pytest -q
 ```
 
-PowerShell sanal ortam etkinleştirmeyi engellerse, yalnızca açık olan terminal oturumu için şu komutu çalıştırın:
+PowerShell sanal ortamı açmaya izin vermezse önce şunu çalıştırın:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
 ```
 
-VS Code'da `Ctrl+Shift+P` → `Python: Select Interpreter` → proje içindeki `.venv` yorumlayıcısını seçin.
-
-## Kullanım
+## Çalıştırma
 
 ```powershell
-python -m pytest -q            # otomatik testler
-python -m src.experiments      # deneyleri çalıştırır, results/ klasörüne grafik ve tablo yazar
-streamlit run app.py           # Link Analizi Simülatörü
-python report/build_report.py  # report/Proje_Raporu.docx dosyasını üretir
+python -m pytest -q          # testler
+python -m src.experiments    # deneyler, sonuçlar results/ klasörüne kaydedilir
+streamlit run app.py         # simülatör
 ```
 
-## Proje yapısı
+## Dosyalar
 
-- `src/graph.py`: sentetik web grafikleri, komşuluk matrisi, Spider Trap / Dead End ekleme
-- `src/pagerank.py`: PageRank (Power Iteration), teleportation, Dead End yönetimi
-- `src/hits.py`: HITS hub/authority (birim L2 norm)
-- `src/experiments.py`: deney senaryoları, grafikler ve networkx doğrulaması
-- `app.py`: Streamlit Link Analizi Simülatörü
-- `tests/`: otomatik testler
-- `results/`: üretilen grafik ve tablolar
-- `report/`: Word raporu ve raporu üreten betik
-
-## Deneyler
-
-1. **Spider Trap etkisi:** tuzaktaki 3 düğümün PageRank payı (α = 0.50, 0.85, 0.99).
-2. **Spider Trap çözümü:** α taraması; teleportation tuzağın payını sınırlar.
-3. **Dead End:** rank kütlesi sızıntısı ve tekdüze yeniden dağıtım çözümü.
-4. **α ve yakınsama hızı:** α büyüdükçe iterasyon sayısı artar.
-5. **HITS:** en yüksek hub ve authority skorları, yakınsama.
-
-Hazırlayan: Ali Cömert (21YÖBİ1042) – bireysel proje.
+- `src/graph.py`: rastgele graf oluşturma, Spider Trap ve Dead End ekleme
+- `src/pagerank.py`: PageRank ve teleportation
+- `src/hits.py`: HITS (hub / authority)
+- `src/experiments.py`: deneyler ve grafikler
+- `app.py`: Streamlit simülatörü
+- `tests/`: testler
+- `results/`: deneylerin grafik ve tabloları
+- `report/Proje_Raporu.docx`: proje raporu
