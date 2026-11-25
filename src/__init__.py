@@ -1,0 +1,1 @@
+"""Web bağlantı analizi projesi."""
