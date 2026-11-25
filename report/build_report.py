@@ -19,11 +19,14 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.experiments import (  # noqa: E402
+    DEAD_NODES,
     N_NODES,
     TRAP_NODES,
     _base_graph,
     validate_against_networkx,
 )
+from src.graph import add_spider_trap  # noqa: E402
+from src.pagerank import pagerank  # noqa: E402
 
 RES = ROOT / "results"
 OUT = ROOT / "report" / "Proje_Raporu.docx"
@@ -185,8 +188,9 @@ def main() -> None:
          f"Deney grafiği: n = {N_NODES} sayfa, bağlantı olasılığı p = 0.08, tohum = 42, "
          f"toplam {n_edges} bağlantı. Temel grafta kendine bağlantı ve ölü yol yoktur; "
          f"bozucu yapılar sonradan kontrollü eklenir. Spider Trap: {TRAP_NODES} düğümlerinin "
-         "çıkışları silinip üçlü döngüye çevrilmiş ve dışarıdan 3 sayfadan tuzağa bağlantı "
-         f"verilmiştir. Dead End: aynı {TRAP_NODES} düğümlerinin tüm çıkış bağlantıları silinmiştir. "
+         "çıkışları silinip üçlü döngüye çevrilmiş ve dışarıdan rastgele seçilen 3 sayfadan "
+         "tuzağa ek bağlantı verilmiştir. Dead End: ayrı bir deneyde "
+         f"{DEAD_NODES} düğümlerinin tüm çıkış bağlantıları silinmiştir. "
          "Durma ölçütü: ardışık iki vektör arasındaki L1 fark < 1e-10.")
 
     # ---------------------------------------------------------------- 5
@@ -207,11 +211,14 @@ def main() -> None:
     h, rows = read_csv("spider_trap_paylari.csv")
     add_table(doc, ["α", "3 düğümün PageRank payı (tuzaksız)", "3 düğümün PageRank payı (tuzaklı)"],
               rows)
+    lo = min(float(r[1]) for r in rows) * 100
+    hi = max(float(r[1]) for r in rows) * 100
     para(doc,
-         f"Tuzaksız grafta bu 3 düğüm toplam rank'in yalnızca %4–5'ini alırken, tuzak eklenince pay "
+         f"Tuzaksız grafta bu 3 düğümün toplam payı yalnızca %{lo:.1f} ile %{hi:.1f} arasındayken, "
+         "tuzak eklenince pay "
          f"belirgin biçimde artar. α büyüdükçe (teleportation azaldıkça) tuzak daha fazla rank "
-         f"emer: α = 0.99'da tuzaktaki 3 sayfa tüm PageRank'in yaklaşık %{float(rows[-1][2]) * 100:.0f}'ini "
-         "toplar. Bu, gerçekte hiçbir önemi olmayan bir sayfa kümesinin sıralamayı ele geçirmesi "
+         f"emer: α = 0.99'da tuzaktaki 3 sayfanın payı yaklaşık %{float(rows[-1][2]) * 100:.0f} "
+         "düzeyine çıkar. Bu, gerçekte hiçbir önemi olmayan bir sayfa kümesinin sıralamayı ele geçirmesi "
          "demektir.")
     add_figure(doc, "spider_trap_alpha.png", "Şekil 1: α'ya göre tuzaktaki 3 düğümün toplam PageRank payı.")
     add_figure(doc, "spider_trap_dugumler.png", "Şekil 2: Düğüm bazında PageRank (α = 0.85); son 3 düğüm tuzaktır.")
@@ -243,8 +250,8 @@ def main() -> None:
                     "İter. (sızıntı)", "İter. (yeniden dağıtım)"], rows)
     para(doc,
          "Naif modelde ölü yolların rank'i her adımda sızar: toplam kütle α = 0.85'te yaklaşık "
-         f"{float(rows[1][1]):.2f}'e, α = 0.99'da {float(rows[2][1]):.2f}'e düşer, yani skorlar olasılık dağılımı "
-         "olmaktan çıkar. Ölü yolun satırının tekdüze (1/n) yapılmasıyla toplam kütle tam 1'de kalır.")
+         f"{float(rows[1][1]):.2f}, α = 0.99'da ise yalnızca {float(rows[2][1]):.2f} olur; yani skorlar "
+         "olasılık dağılımı olmaktan çıkar. Ölü yolun satırının tekdüze (1/n) yapılmasıyla toplam kütle tam 1'de kalır.")
     add_figure(doc, "dead_end_kutle.png", "Şekil 4: Dead End nedeniyle toplam PageRank kütlesinin kaybı.")
 
     doc.add_heading("5.5 α'nın yakınsama hızına etkisi", 2)
@@ -255,6 +262,13 @@ def main() -> None:
          f"{rows[0][1]}, α = 0.85'te {rows[1][1]}, α = 0.99'da {rows[2][1]} iterasyon gerekir. "
          "Teorik üst sınır αᵏ olsa da gözlenen hız grafın yapısına bağlıdır; rastgele graf hızlı "
          "karıştığı için gözlenen iterasyon sayıları üst sınırdan çok daha azdır.")
+    trapped = add_spider_trap(A, TRAP_NODES, seed=1)
+    it_trap = {a: pagerank(trapped, a).iterations for a in (0.85, 0.99)}
+    para(doc,
+         "Graf yapısının etkisi Spider Trap'li grafta açıkça görülür: tuzak periyodik bir döngü "
+         "olduğu için hata gerçekten yaklaşık α hızında küçülür. Aynı tolerans için tuzaklı grafta "
+         f"α = 0.85'te {it_trap[0.85]}, α = 0.99'da {it_trap[0.99]} iterasyon gerekmiştir. Yani α "
+         "1'e yaklaştıkça hem tuzak etkisi büyür hem de hesaplama maliyeti artar.")
     add_figure(doc, "alpha_yakinsama.png", "Şekil 5: Farklı α değerleri için yakınsama eğrileri (log ölçek).")
 
     doc.add_heading("5.6 HITS sonuçları", 2)
@@ -282,13 +296,15 @@ def main() -> None:
     ])
 
     # ---------------------------------------------------------------- 7
+    _, conv_rows = read_csv("alpha_yakinsama.csv")
+    conv_text = " → ".join(r[1] for r in conv_rows)
     doc.add_heading("7. Sonuç", 1)
     bullets(doc, [
         "PageRank ve HITS sıfırdan gerçeklenmiş ve networkx ile ~1e-12 farkla doğrulanmıştır.",
         "Spider Trap, teleportation yokken tüm rank'i emer; α = 0.99'da bile payı çok yüksektir.",
         "Teleportation tuzağın payını sınırlar; α bu sınırlama ile bağlantı bilgisinin korunması arasındaki dengeyi belirler.",
         "Dead End kütle sızıntısına yol açar; tekdüze yeniden dağıtım ile toplam kütle 1'de tutulur.",
-        "α arttıkça yakınsama yavaşlar (19 → 35 → 45 iterasyon).",
+        f"α arttıkça yakınsama yavaşlar ({conv_text} iterasyon); tuzaklı grafta bu yavaşlama çok daha belirgindir.",
     ])
     para(doc,
          "Sınırlılıklar: Deneyler tek bir sentetik rastgele graf üzerinde yapılmıştır; gerçek web "

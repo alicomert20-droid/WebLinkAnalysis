@@ -88,6 +88,37 @@ def test_networkx_ile_uyum():
     assert diffs["authority_max_diff"] < 1e-6
 
 
+def _exact_pagerank(A, alpha, mode="redistribute", v=None):
+    """PageRank'in kapalı form çözümü: (I - α Pᵀ) r = (1 - α) v."""
+    n = A.shape[0]
+    v = np.full(n, 1 / n) if v is None else v
+    P = build_transition_matrix(A, mode, dangling=v)
+    return np.linalg.solve(np.eye(n) - alpha * P.T, (1 - alpha) * v)
+
+
+@pytest.mark.parametrize("alpha", [0.5, 0.85, 0.99])
+@pytest.mark.parametrize("kind", ["base", "trap", "dead_leak", "dead_fix"])
+def test_pagerank_kapali_form_ile_ayni(kind, alpha):
+    base = _base_graph()
+    A, mode = {
+        "base": (base, "redistribute"),
+        "trap": (add_spider_trap(base, TRAP_NODES, seed=1), "redistribute"),
+        "dead_leak": (add_dead_end(base, DEAD_NODES), "leak"),
+        "dead_fix": (add_dead_end(base, DEAD_NODES), "redistribute"),
+    }[kind]
+    res = pagerank(A, alpha, dead_end=mode)
+    assert res.converged  # tuzaklı grafta α=0.99 binlerce iterasyon ister
+    assert np.allclose(res.scores, _exact_pagerank(A, alpha, mode), atol=1e-8)
+
+
+def test_kisisellestirilmis_teleport_dead_end_ile_tutarli():
+    A = add_dead_end(example_graph(), [3])
+    v = np.array([0.7, 0.1, 0.1, 0.1])
+    res = pagerank(A, 0.85, teleport=v)
+    assert res.total_mass == pytest.approx(1.0)
+    assert np.allclose(res.scores, _exact_pagerank(A, 0.85, v=v), atol=1e-8)
+
+
 def test_gecersiz_parametreler():
     with pytest.raises(ValueError):
         pagerank(example_graph(), alpha=1.0)

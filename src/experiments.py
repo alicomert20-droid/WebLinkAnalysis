@@ -44,6 +44,14 @@ def _base_graph() -> np.ndarray:
     return create_random_web_graph(N_NODES, p=0.08, seed=SEED)
 
 
+def _pr(A: np.ndarray, alpha: float, **kwargs):
+    """PageRank'i çalıştırır; yakınsamadıysa sessizce devam etmek yerine hata verir."""
+    res = pagerank(A, alpha, **kwargs)
+    if not res.converged:
+        raise RuntimeError(f"PageRank α={alpha} için {res.iterations} iterasyonda yakınsamadı.")
+    return res
+
+
 # ---------------------------------------------------------------- doğrulama
 def validate_against_networkx(A: np.ndarray | None = None) -> dict[str, float]:
     """Kendi PageRank/HITS uygulamamızı networkx ile karşılaştırır."""
@@ -51,11 +59,13 @@ def validate_against_networkx(A: np.ndarray | None = None) -> dict[str, float]:
 
     A = _base_graph() if A is None else A
     G = to_networkx(A)
-    mine_pr = pagerank(A, alpha=0.85, tol=1e-12).scores
+    mine_pr = _pr(A, 0.85, tol=1e-12).scores
     nx_pr = nx.pagerank(G, alpha=0.85, tol=1e-12, max_iter=1000)
     pr_diff = max(abs(mine_pr[i] - nx_pr[i]) for i in range(len(mine_pr)))
 
     res = hits(A, tol=1e-12)
+    if not res.converged:
+        raise RuntimeError("HITS yakınsamadı.")
     nx_h, nx_a = nx.hits(G, tol=1e-12, max_iter=1000, normalized=True)
     h = res.hubs / res.hubs.sum()
     a = res.authorities / res.authorities.sum()
@@ -71,8 +81,8 @@ def experiment_spider_trap(out_dir: Path = RESULTS_DIR) -> list[list]:
     trapped = add_spider_trap(base, TRAP_NODES, seed=1)
     rows = []
     for alpha in ALPHAS:
-        s_base = pagerank(base, alpha).scores
-        s_trap = pagerank(trapped, alpha).scores
+        s_base = _pr(base, alpha).scores
+        s_trap = _pr(trapped, alpha).scores
         rows.append([
             alpha,
             round(float(s_base[TRAP_NODES].sum()), 6),
@@ -97,8 +107,8 @@ def experiment_spider_trap(out_dir: Path = RESULTS_DIR) -> list[list]:
     # Grafik 2: düğüm bazında PageRank (α=0.85)
     fig, ax = plt.subplots(figsize=(9, 4))
     idx = np.arange(N_NODES)
-    ax.bar(idx - 0.2, pagerank(base, 0.85).scores, 0.4, label="Tuzaksız")
-    ax.bar(idx + 0.2, pagerank(trapped, 0.85).scores, 0.4, label="Tuzaklı", color="tab:red")
+    ax.bar(idx - 0.2, _pr(base, 0.85).scores, 0.4, label="Tuzaksız")
+    ax.bar(idx + 0.2, _pr(trapped, 0.85).scores, 0.4, label="Tuzaklı", color="tab:red")
     ax.set_xlabel("Düğüm")
     ax.set_ylabel("PageRank (α=0.85)")
     ax.set_title("Düğüm bazında PageRank: son 3 düğüm tuzak")
@@ -135,8 +145,8 @@ def experiment_spider_trap_solution(out_dir: Path = RESULTS_DIR) -> list[list]:
     alphas = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 0.99]
     rows = []
     for alpha in alphas:
-        share_trap = float(pagerank(trapped, alpha).scores[TRAP_NODES].sum())
-        share_base = float(pagerank(base, alpha).scores[TRAP_NODES].sum())
+        share_trap = float(_pr(trapped, alpha).scores[TRAP_NODES].sum())
+        share_base = float(_pr(base, alpha).scores[TRAP_NODES].sum())
         rows.append([alpha, round(share_base, 6), round(share_trap, 6)])
     no_tp = trap_mass_without_teleportation(trapped, TRAP_NODES)
     rows.append([1.0, "-", round(no_tp, 6)])
@@ -169,8 +179,8 @@ def experiment_dead_end(out_dir: Path = RESULTS_DIR) -> list[list]:
     dead = add_dead_end(base, DEAD_NODES)
     rows = []
     for alpha in ALPHAS:
-        leak = pagerank(dead, alpha, dead_end="leak")
-        fixed = pagerank(dead, alpha, dead_end="redistribute")
+        leak = _pr(dead, alpha, dead_end="leak")
+        fixed = _pr(dead, alpha, dead_end="redistribute")
         rows.append([
             alpha,
             round(leak.total_mass, 6),
@@ -204,7 +214,7 @@ def experiment_alpha_convergence(out_dir: Path = RESULTS_DIR) -> list[list]:
     rows = []
     fig, ax = plt.subplots(figsize=(7, 4))
     for alpha in ALPHAS:
-        res = pagerank(base, alpha, tol=1e-10, max_iter=5000)
+        res = _pr(base, alpha, tol=1e-10)
         rows.append([alpha, res.iterations, res.converged, f"{res.residuals[-1]:.2e}"])
         ax.semilogy(range(1, len(res.residuals) + 1), res.residuals, label=f"α={alpha}")
     _save_csv(out_dir / "alpha_yakinsama.csv",
@@ -225,6 +235,8 @@ def experiment_hits(out_dir: Path = RESULTS_DIR, top_k: int = 10) -> list[list]:
     """HITS hub/authority skorları ve yakınsama."""
     base = _base_graph()
     res = hits(base)
+    if not res.converged:
+        raise RuntimeError("HITS yakınsamadı.")
     order_h = np.argsort(-res.hubs)[:top_k]
     order_a = np.argsort(-res.authorities)[:top_k]
     rows = [[int(i), round(float(res.hubs[i]), 6), int(j), round(float(res.authorities[j]), 6)]

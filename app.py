@@ -30,14 +30,19 @@ def build_graph(n, p, seed, trap_size, dead_count):
     """Kenar çubuğundaki ayarlara göre grafı kurar; (A, tuzak, ölü yol) döndürür."""
     A = create_random_web_graph(n, p, seed=seed)
     trap = list(range(n - trap_size, n)) if trap_size > 0 else []
-    if trap:
-        A = add_spider_trap(A, trap, seed=seed)
-    dead = []
-    if dead_count > 0:
-        # Ölü yollar tuzağın hemen önündeki düğümlerden seçilir (çakışmasın)
-        end = n - trap_size
-        dead = list(range(max(0, end - dead_count), end))
+    # Ölü yollar tuzağın hemen önündeki düğümlerden seçilir (çakışmasın)
+    end = n - trap_size
+    dead = list(range(max(0, end - dead_count), end)) if dead_count > 0 else []
+    if dead:
         A = add_dead_end(A, dead)
+    if trap:
+        # Tuzağa giriş bağlantıları ölü yol olmayan sayfalardan verilir; aksi halde
+        # ölü yol ya ölü yol olmaktan çıkar ya da giriş bağlantısı silinir.
+        rng = np.random.default_rng(seed)
+        candidates = [i for i in range(n) if i not in trap and i not in dead]
+        k = min(3, len(candidates))
+        entries = [int(x) for x in rng.choice(candidates, size=k, replace=False)]
+        A = add_spider_trap(A, trap, entry_sources=entries)
     return A, trap, dead
 
 
@@ -142,7 +147,7 @@ with tab_hits:
 with tab_conv:
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
     for a in (0.50, 0.85, 0.99):
-        res = pagerank(A, a, tol=tol, max_iter=5000, dead_end=dead_mode)
+        res = pagerank(A, a, tol=tol, dead_end=dead_mode)
         axes[0].semilogy(range(1, len(res.residuals) + 1), res.residuals,
                          label=f"α={a} ({res.iterations} it.)")
     axes[0].set_title("PageRank yakınsaması")
